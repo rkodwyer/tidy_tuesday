@@ -4,7 +4,9 @@ package_list <- list("tidyverse",
                      "here",
                      "scales",
                      "RColorBrewer",
-                     "glue")
+                     "glue",
+                     "ggbeeswarm",
+                     "ggrepel")
 
 # Uncomment to install packages
 # for (package in package_list) {
@@ -43,18 +45,34 @@ horror_caption <- "Data from Georgios Karamanis"
 horror_movies <- horror_movies %>% 
   mutate(release_date = dmy(release_date),
          release_country = as_factor(release_country),
-         budget = as.numeric(str_remove_all(budget, "[$,]")),
+         budget = as.numeric(str_remove_all(budget, "[$,]"))/10^6,
          movie_run_time = as.numeric(str_remove_all(movie_run_time, " min")),
          movie_rating = as_factor(movie_rating),
          language = as_factor(language))
 
-# Add release year
+# Add release year and budget_band
 horror_movies <- horror_movies %>% 
-  mutate(release_year = year(release_date))
+  mutate(release_year = year(release_date),
+         budget_band = case_when(budget <=0.01 ~ "$0-10k",
+                                 budget <=0.05 ~"$10-50k",
+                                 budget <= 0.1 ~ "$50-100k",
+                                 budget <= 0.5 ~ "$100-500k",
+                                 budget <= 2 ~ "$500k-2mil",
+                                 budget <= 5 ~ "$2-5mil",
+                                 budget <= 50 ~ "$5-50mil",
+                                 budget > 50 ~ "+$50mil"),
+         budget_band = as_factor(budget_band))
 
-horror_movies %>% 
-  ggplot() +
-  geom_point(aes(x = review_rating, y = movie_run_time))
+# Reorder factor levels for plotting
+horror_movies$budget_band =  fct_relevel(horror_movies$budget_band, 
+                                         c("$0-10k",
+                                           "$10-50k",
+                                           "$50-100k",
+                                           "$100-500k",
+                                           "$500k-2mil",
+                                           "$2-5mil",
+                                           "$5-50mil",
+                                           "+$50mil"))
 
 # Summarise by year
 horror_movies_summary <- horror_movies %>% 
@@ -105,4 +123,43 @@ ggplot(data = ratings) +
   scale_y_continuous(breaks = pretty_breaks(n = 9)) +
   ggsave("ratings.png", width = 8, height = 8*9/16)
 
+
+### PLOT RATING VS BUDGET -----------------------------------------------------
+# Calculate mean rating for each budget_band for plot
+mean_rating_df <- horror_movies %>%
+  filter(!is.na(budget_band)) %>% 
+  group_by(budget_band) %>% 
+  summarise(mean_rating = mean(review_rating, na.rm = T))
+
+# Plot rating versus budget_band with means shown and labelled
+horror_movies %>%
+  filter(!is.na(review_rating) & !is.na(budget_band) & !is.na(release_year)) %>% 
+  ggplot(aes(x = budget_band, y = review_rating)) +
+  geom_quasirandom(aes(colour = as_factor(release_year)), alpha = 0.8) +
+  geom_point(data = mean_rating_df, aes(x = budget_band, y = mean_rating), 
+             colour = "black", size = 3, shape = 15) +
+  geom_text_repel(data = mean_rating_df, aes(x = budget_band, y = mean_rating, 
+                                              label = format(signif(mean_rating, 2), 1)),
+                  nudge_y = 1 + mean_rating_df$mean_rating,
+                  nudge_x = 0.4,
+                  segment.size  = 0.3,
+                  segment.color = "grey50",
+                  size = 3) +
+  horror_plot_theme +
+  scale_fill_brewer(palette = "Spectral") +
+  scale_color_brewer(palette = "Spectral") +
+  labs(title = "For horror movies, bigger budget equals better rating",
+       subtitle = "Rating versus budget (with mean labelled)\n",
+       x = "",
+       y = "",
+       caption = horror_caption) +
+  theme(legend.title = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.grid.major.x = element_blank()) +
+  scale_y_continuous(breaks = pretty_breaks(5),
+                     expand = c(0.2, 0.2)) +
+  ggsave("budget_vs_rating.png", width = 8, height = 8*9/16)
   
+
+
+
