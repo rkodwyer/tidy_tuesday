@@ -87,7 +87,7 @@ cran_lang_plot %>%
             #nudge_y = , 
   size = 3) +
   coord_flip() +
-  labs(title = "Did BASH fixed a SH verbosity problem?",
+  labs(title = "Did BASH fix a SH verbosity problem?",
        subtitle = "Total lines per file versus mean of all languages\n",
        y = "% difference of total lines per file versus mean across all languages",
        x = "",
